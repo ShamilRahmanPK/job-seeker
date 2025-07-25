@@ -15,16 +15,19 @@ const JobSeekerDashboard = () => {
   const [search, setSearch] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
   const [selectedJob, setSelectedJob] = useState(null);
-  const [name, setName] = useState("");
+  const [name, setName] = useState(user?.name || "");
   const [coverLetter, setCoverLetter] = useState("");
   const [location, setLocation] = useState("");
   const [phone, setPhone] = useState("");
   const [linkedin, setLinkedin] = useState("");
   const [resume, setResume] = useState(null);
-
   const [modalOpen, setModalOpen] = useState(false);
   const [savedJobs, setSavedJobs] = useState([]);
-  const [loading, setLoading] = useState(false); 
+  const [loading, setLoading] = useState(false);
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const jobsPerPage = 6;
 
   const fetchJobs = async () => {
     const res = await getAllJobsAPI();
@@ -35,50 +38,37 @@ const JobSeekerDashboard = () => {
     fetchJobs();
   }, []);
 
-  useEffect(() => {
-    if (name) {
-      localStorage.setItem("name", name);
-    }
-  }, [name]);
-
   const handleSubmit = async (e) => {
-  e.preventDefault();
-
-  if (!resume || !name || !location || !phone) {
-    toast.error("Please fill all required fields.");
-    return;
-  }
-
-  try {
-    setLoading(true);
-
-    const formData = new FormData();
-    formData.append("job", selectedJob._id);
-    formData.append("name", name); 
-    formData.append("coverLetter", coverLetter);
-    formData.append("resume", resume); 
-    formData.append("location", location)
-    formData.append("phone", phone); 
-
-    const res = await createApplicationAPI(formData, token);
-
-    if (res.status === 201) {
-      toast.success("Application submitted successfully!");
-      setCoverLetter("");
-      setResume(null);
-      setModalOpen(false);
-    } else {
-      toast.error("Failed to submit application");
+    e.preventDefault();
+    if (!resume || !name || !location || !phone) {
+      toast.error("Please fill all required fields.");
+      return;
     }
-  } catch (error) {
-    console.error("Submission error:", error);
-    toast.error("Something went wrong!");
-  } finally {
-    setLoading(false);
-  }
-};
-  
-
+    try {
+      setLoading(true);
+      const formData = new FormData();
+      formData.append("job", selectedJob._id);
+      formData.append("name", name);
+      formData.append("coverLetter", coverLetter);
+      formData.append("resume", resume);
+      formData.append("location", location);
+      formData.append("phone", phone);
+      const res = await createApplicationAPI(formData, token);
+      if (res.status === 201) {
+        toast.success("Application submitted successfully!");
+        setCoverLetter("");
+        setResume(null);
+        setModalOpen(false);
+      } else {
+        toast.error("Failed to submit application");
+      }
+    } catch (error) {
+      console.error("Submission error:", error);
+      toast.error("Something went wrong!");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSave = async (jobId) => {
     try {
@@ -92,10 +82,18 @@ const JobSeekerDashboard = () => {
     }
   };
 
-  const filteredJobs = jobs.filter(
-    (job) =>
-      job.title.toLowerCase().includes(search.toLowerCase()) &&
-      job.location.toLowerCase().includes(locationFilter.toLowerCase())
+  const filteredJobs = jobs
+    .filter(
+      (job) =>
+        job.title.toLowerCase().includes(search.toLowerCase()) &&
+        job.location.toLowerCase().includes(locationFilter.toLowerCase())
+    )
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+  const totalPages = Math.ceil(filteredJobs.length / jobsPerPage);
+  const displayedJobs = filteredJobs.slice(
+    (currentPage - 1) * jobsPerPage,
+    currentPage * jobsPerPage
   );
 
   return (
@@ -106,8 +104,7 @@ const JobSeekerDashboard = () => {
           Welcome, {name || "Job Seeker"}
         </h1>
 
-        {/* Search Section */}
-        <div className="flex gap-4 mb-6">
+        <div className="flex flex-col md:flex-row gap-4 mb-6">
           <input
             type="text"
             placeholder="Search by job title"
@@ -124,23 +121,27 @@ const JobSeekerDashboard = () => {
           />
         </div>
 
-        {/* Job Listings */}
-        {filteredJobs.length > 0 ? (
-          <ul className="space-y-4">
-            {filteredJobs.map((job) => (
-              <li key={job._id} className="border p-4 rounded shadow">
-                <h3 className="text-lg font-bold">{job.title}</h3>
+        {displayedJobs.length > 0 ? (
+          <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {displayedJobs.map((job) => (
+              <li
+                key={job._id}
+                className="border p-4 rounded-lg shadow hover:shadow-md transition"
+              >
+                <h3 className="text-lg font-semibold text-blue-700">
+                  {job.title}
+                </h3>
                 <p>
                   <strong>Location:</strong> {job.location}
                 </p>
                 <p>
                   <strong>Salary:</strong> {job.salary}
                 </p>
-                <p>
-                  <strong>Description:</strong> {job.description}
+                <p className="text-sm text-gray-700">
+                  {job.description?.slice(0, 100)}...
                 </p>
 
-                <div className="flex gap-4 mt-3">
+                <div className="flex gap-3 mt-3">
                   <button
                     onClick={() => {
                       setSelectedJob(job);
@@ -163,12 +164,31 @@ const JobSeekerDashboard = () => {
         ) : (
           <p>No jobs found.</p>
         )}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex justify-center mt-6 space-x-2">
+            {[...Array(totalPages)].map((_, idx) => (
+              <button
+                key={idx}
+                onClick={() => setCurrentPage(idx + 1)}
+                className={`px-3 py-1 rounded border ${
+                  currentPage === idx + 1
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-800'
+                }`}
+              >
+                {idx + 1}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Application Modal */}
-      {modalOpen && (
+      {/* Modal */}
+      {modalOpen && selectedJob && (
         <div className="fixed top-0 left-0 w-full h-full bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded w-[90%] md:w-[500px] relative">
+          <div className="bg-white p-6 rounded w-[90%] md:w-[500px] relative animate-fadeIn">
             <h2 className="text-xl font-bold mb-4">
               Apply for {selectedJob.title}
             </h2>
@@ -216,11 +236,10 @@ const JobSeekerDashboard = () => {
               <input
                 type="file"
                 accept=".pdf,.doc,.docx"
-                className="w-full mb-4 border border-gray-300 p-2"
+                className="w-full mb-4 border p-2"
                 onChange={(e) => setResume(e.target.files[0])}
                 required
               />
-
               <div className="flex justify-end gap-3">
                 <button
                   type="button"

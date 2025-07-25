@@ -1,1 +1,1 @@
-export const SERVER_BASE_URL = "http://localhost:4000";
+export const SERVER_BASE_URL = "https://job-seeker-server-t477.onrender.com";
